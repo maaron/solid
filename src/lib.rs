@@ -5,6 +5,7 @@ pub mod transform;
 pub mod dsl;
 pub mod evaluator;
 pub mod renderer;
+pub mod lang;
 
 pub use glam::{Vec2, Vec3, Mat3, Mat4};
 
