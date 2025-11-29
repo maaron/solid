@@ -1,0 +1,4 @@
+# Simple circle example
+# This file demonstrates a basic primitive shape
+
+circle 2.0

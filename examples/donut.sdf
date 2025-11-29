@@ -1,0 +1,6 @@
+# Donut shape using subtraction
+# This demonstrates the CSG difference operation
+
+subtract
+  circle 2.5
+  circle 1.5

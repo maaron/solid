@@ -1,0 +1,21 @@
+[package]
+name = "solid_modeling"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wgpu = "23.0"
+winit = "0.30"
+bytemuck = { version = "1.14", features = ["derive"] }
+glam = "0.29"
+pollster = "0.3"
+env_logger = "0.11"
+log = "0.4"
+
+[lib]
+name = "solid_modeling"
+path = "src/lib.rs"
+
+[[bin]]
+name = "solid_viewer"
+path = "src/main.rs"

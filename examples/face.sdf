@@ -1,0 +1,16 @@
+# Smiley face
+# This demonstrates complex composition with multiple operations
+
+subtract
+  circle 2.0
+  union
+    translate -0.7 0.7
+      circle 0.3
+    union
+      translate 0.7 0.7
+        circle 0.3
+      intersect
+        translate 0.0 -0.5
+          rectangle 1.2 0.3
+        translate 0.0 -1.0
+          circle 1.8

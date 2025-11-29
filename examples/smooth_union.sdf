@@ -1,0 +1,8 @@
+# Smooth union (metaballs)
+# This creates a smooth blend between two shapes
+
+smooth-union 0.8
+  translate -1.0 0.0
+    circle 1.5
+  translate 1.0 0.0
+    circle 1.5

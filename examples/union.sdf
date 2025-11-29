@@ -1,0 +1,8 @@
+# Union of two circles
+# This demonstrates the CSG union operation
+
+union
+  translate -1.0 0.0
+    circle 1.5
+  translate 1.0 0.0
+    circle 1.5
