@@ -247,7 +247,7 @@ mod tests {
     #[test]
     fn test_eval_application() {
         // Create environment with a simple addition function
-        let mut env = Env::new();
+        let env = Env::new();
 
         // Test: (λx. x) 42
         let identity = Expr::lambda("x", Type::Scalar, Expr::var("x"));

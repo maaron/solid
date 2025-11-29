@@ -112,6 +112,18 @@ impl Env {
     pub fn insert(&mut self, var: Var, value: Value) {
         self.bindings.insert(var, value);
     }
+
+    /// Create a new environment with all built-in functions
+    pub fn with_builtins() -> Self {
+        use super::builtins::{BUILTIN_NAMES, lookup_builtin};
+        let mut env = Self::new();
+        for name in BUILTIN_NAMES {
+            if let Some(value) = lookup_builtin(name) {
+                env.insert(name.to_string(), value);
+            }
+        }
+        env
+    }
 }
 
 /// Evaluation errors

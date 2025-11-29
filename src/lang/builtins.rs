@@ -3,6 +3,13 @@ use super::env::{Value, EvalError};
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
 
+/// List of all built-in function names
+pub const BUILTIN_NAMES: &[&str] = &[
+    "+", "-", "*", "/", "min", "max", "abs", "sin", "cos", "sqrt", "negate",
+    "<", ">", "==",
+    "length", "dot", "normalize", "vec_add", "vec_sub", "vec_scale",
+];
+
 /// Lookup a built-in function by name
 pub fn lookup_builtin(name: &str) -> Option<Value> {
     BUILTINS.get(name).copied().map(Value::Builtin)
