@@ -8,6 +8,7 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "+", "-", "*", "/", "min", "max", "abs", "sin", "cos", "sqrt", "negate",
     "<", ">", "==",
     "length", "dot", "normalize", "vec_add", "vec_sub", "vec_scale",
+    "sample",
 ];
 
 /// Lookup a built-in function by name
@@ -32,6 +33,7 @@ pub fn get_arity(f: fn(&[Value]) -> Result<Value, EvalError>) -> usize {
         || f as usize == builtin_vec_add as usize
         || f as usize == builtin_vec_sub as usize
         || f as usize == builtin_vec_scale as usize
+        || f as usize == builtin_sample as usize
     {
         2
     } else {
@@ -69,6 +71,9 @@ static BUILTINS: Lazy<HashMap<&'static str, fn(&[Value]) -> Result<Value, EvalEr
         map.insert("vec_add", builtin_vec_add as fn(&[Value]) -> Result<Value, EvalError>);
         map.insert("vec_sub", builtin_vec_sub as fn(&[Value]) -> Result<Value, EvalError>);
         map.insert("vec_scale", builtin_vec_scale as fn(&[Value]) -> Result<Value, EvalError>);
+
+        // Field operations
+        map.insert("sample", builtin_sample as fn(&[Value]) -> Result<Value, EvalError>);
 
         map
     });
@@ -242,6 +247,14 @@ fn builtin_vec_scale(args: &[Value]) -> Result<Value, EvalError> {
 
     let result: Vec<f64> = v.iter().map(|x| s * x).collect();
     Ok(Value::Vec(result))
+}
+
+// ===== Field Operations =====
+
+fn builtin_sample(args: &[Value]) -> Result<Value, EvalError> {
+    check_arity(args, 2)?;
+    // Use sample_field from eval module
+    super::eval::sample_field(args[0].clone(), args[1].clone())
 }
 
 // ===== Helper Functions =====

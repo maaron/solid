@@ -29,3 +29,7 @@ path = "examples/lang_examples.rs"
 [[example]]
 name = "parser_examples"
 path = "examples/parser_examples.rs"
+
+[[example]]
+name = "field_zero_examples"
+path = "examples/field_zero_examples.rs"

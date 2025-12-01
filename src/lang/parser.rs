@@ -66,6 +66,20 @@ where
     delimited(ws, parser, ws)
 }
 
+/// Parse a keyword (must not be followed by identifier characters)
+fn keyword<'a>(kw: &'static str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
+    move |input: &'a str| {
+        let (remaining, matched) = tag(kw)(input)?;
+        // Check that keyword is not followed by identifier characters
+        if let Some(next_char) = remaining.chars().next() {
+            if next_char.is_alphanumeric() || next_char == '_' || next_char == '-' {
+                return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Tag)));
+            }
+        }
+        Ok((remaining, matched))
+    }
+}
+
 /// Identifier (variable name or operator)
 fn identifier(input: &str) -> IResult<&str, String> {
     alt((
@@ -117,8 +131,8 @@ fn parse_scalar(input: &str) -> IResult<&str, Expr> {
 /// Parse a boolean literal
 fn parse_bool(input: &str) -> IResult<&str, Expr> {
     lexeme(alt((
-        value(Expr::bool(true), tag("true")),
-        value(Expr::bool(false), tag("false")),
+        value(Expr::bool(true), keyword("true")),
+        value(Expr::bool(false), keyword("false")),
     )))(input)
 }
 
@@ -131,7 +145,7 @@ fn parse_var(input: &str) -> IResult<&str, Expr> {
 fn parse_vector(input: &str) -> IResult<&str, Expr> {
     map(
         delimited(
-            tuple((lexeme(char('(')), lexeme(tag("vec")))),
+            tuple((lexeme(char('(')), lexeme(keyword("vec")))),
             many0(parse_expr),
             lexeme(char(')')),
         ),
@@ -145,7 +159,7 @@ fn parse_color(input: &str) -> IResult<&str, Expr> {
         // rgba
         map(
             delimited(
-                tuple((lexeme(char('(')), lexeme(tag("rgba")))),
+                tuple((lexeme(char('(')), lexeme(keyword("rgba")))),
                 tuple((parse_expr, parse_expr, parse_expr, parse_expr)),
                 lexeme(char(')')),
             ),
@@ -159,7 +173,7 @@ fn parse_color(input: &str) -> IResult<&str, Expr> {
         // rgb (alpha defaults to 1.0)
         map(
             delimited(
-                tuple((lexeme(char('(')), lexeme(tag("rgb")))),
+                tuple((lexeme(char('(')), lexeme(keyword("rgb")))),
                 tuple((parse_expr, parse_expr, parse_expr)),
                 lexeme(char(')')),
             ),
@@ -185,7 +199,7 @@ fn parse_nil(input: &str) -> IResult<&str, Expr> {
 fn parse_cons(input: &str) -> IResult<&str, Expr> {
     map(
         delimited(
-            tuple((lexeme(char('(')), lexeme(tag("cons")))),
+            tuple((lexeme(char('(')), lexeme(keyword("cons")))),
             pair(parse_expr, parse_expr),
             lexeme(char(')')),
         ),
@@ -197,7 +211,7 @@ fn parse_cons(input: &str) -> IResult<&str, Expr> {
 fn parse_lambda(input: &str) -> IResult<&str, Expr> {
     map(
         delimited(
-            tuple((lexeme(char('(')), lexeme(tag("fn")))),
+            tuple((lexeme(char('(')), lexeme(keyword("fn")))),
             tuple((
                 // Parameter with type: (x Type)
                 delimited(
@@ -218,7 +232,7 @@ fn parse_lambda(input: &str) -> IResult<&str, Expr> {
 fn parse_let(input: &str) -> IResult<&str, Expr> {
     map(
         delimited(
-            tuple((lexeme(char('(')), lexeme(tag("let")))),
+            tuple((lexeme(char('(')), lexeme(keyword("let")))),
             tuple((
                 lexeme(identifier),
                 parse_expr,
@@ -238,7 +252,7 @@ fn parse_let(input: &str) -> IResult<&str, Expr> {
 fn parse_field(input: &str) -> IResult<&str, Expr> {
     map(
         delimited(
-            tuple((lexeme(char('(')), lexeme(tag("field")))),
+            tuple((lexeme(char('(')), lexeme(keyword("field")))),
             tuple((
                 // Parameter with dimension: (p 2)
                 delimited(
@@ -259,7 +273,7 @@ fn parse_field(input: &str) -> IResult<&str, Expr> {
 fn parse_if(input: &str) -> IResult<&str, Expr> {
     map(
         delimited(
-            tuple((lexeme(char('(')), lexeme(tag("if")))),
+            tuple((lexeme(char('(')), lexeme(keyword("if")))),
             tuple((parse_expr, parse_expr, parse_expr)),
             lexeme(char(')')),
         ),
@@ -271,7 +285,7 @@ fn parse_if(input: &str) -> IResult<&str, Expr> {
 fn parse_fold(input: &str) -> IResult<&str, Expr> {
     map(
         delimited(
-            tuple((lexeme(char('(')), lexeme(tag("fold")))),
+            tuple((lexeme(char('(')), lexeme(keyword("fold")))),
             tuple((parse_expr, parse_expr, parse_expr)),
             lexeme(char(')')),
         ),
