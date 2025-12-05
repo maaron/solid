@@ -13,7 +13,11 @@ pub fn eval(expr: &Expr, env: &Env) -> Result<Value, EvalError> {
             .ok_or_else(|| EvalError::UnboundVariable(name.clone())),
 
         // ===== Literals =====
-        Expr::Scalar(v) => Ok(Value::Scalar(*v)),
+        Expr::Scalar(s) => {
+            s.parse::<f64>()
+                .map(Value::Scalar)
+                .map_err(|_| EvalError::InvalidOperation(format!("Invalid scalar: {}", s)))
+        }
 
         Expr::Bool(b) => Ok(Value::Bool(*b)),
 
@@ -49,7 +53,7 @@ pub fn eval(expr: &Expr, env: &Env) -> Result<Value, EvalError> {
         }
 
         // ===== Lambda Calculus =====
-        Expr::Lambda { param, body, .. } => Ok(Value::Closure {
+        Expr::Lambda { param, body } => Ok(Value::Closure {
             param: param.clone(),
             body: (**body).clone(),
             env: env.clone(),
@@ -83,15 +87,6 @@ pub fn eval(expr: &Expr, env: &Env) -> Result<Value, EvalError> {
             // For now, we erase dimensions at runtime
             eval(expr, env)
         }
-
-        // ===== Field Construction =====
-        // KEY: Fields are NOT evaluated! They remain as closures.
-        Expr::Field { param, dim, body } => Ok(Value::Field {
-            param: param.clone(),
-            dim: *dim,
-            body: (**body).clone(),
-            env: env.clone(),
-        }),
 
         // ===== Let Binding =====
         Expr::Let { var, value, body, .. } => {
@@ -159,11 +154,11 @@ fn apply(func: Value, arg: Value) -> Result<Value, EvalError> {
     }
 }
 
-/// Sample a field at a point
+/// Sample a field at a point (just function application now)
 pub fn sample_field(field: Value, point: Value) -> Result<Value, EvalError> {
     match field {
+        // Field variant still supported for compatibility
         Value::Field { param, dim, body, env } => {
-            // Verify point has correct dimension
             let point_vec = match point {
                 Value::Vec(v) if v.len() == dim => v,
                 Value::Vec(v) => {
@@ -175,11 +170,11 @@ pub fn sample_field(field: Value, point: Value) -> Result<Value, EvalError> {
                     ));
                 }
             };
-
-            // Evaluate the body with the point bound
             let new_env = env.extend(param, Value::Vec(point_vec));
             eval(&body, &new_env)
         }
+        // Regular functions can be sampled too
+        Value::Closure { .. } => apply(field, point),
         _ => Err(EvalError::NotAField),
     }
 }
@@ -216,7 +211,7 @@ mod tests {
     #[test]
     fn test_eval_scalar() {
         let env = Env::new();
-        let expr = Expr::scalar(42.0);
+        let expr = Expr::scalar("42.0");
         let result = eval(&expr, &env).unwrap();
         assert_eq!(result, Value::Scalar(42.0));
     }
@@ -224,7 +219,7 @@ mod tests {
     #[test]
     fn test_eval_vector() {
         let env = Env::new();
-        let expr = Expr::Vec(vec![Expr::scalar(1.0), Expr::scalar(2.0)]);
+        let expr = Expr::Vec(vec![Expr::scalar("1.0"), Expr::scalar("2.0")]);
         let result = eval(&expr, &env).unwrap();
         assert_eq!(result, Value::Vec(vec![1.0, 2.0]));
     }
@@ -232,8 +227,8 @@ mod tests {
     #[test]
     fn test_eval_lambda() {
         let env = Env::new();
-        // λ(x : Scalar). x
-        let expr = Expr::lambda("x", Type::Scalar, Expr::var("x"));
+        // λx. x
+        let expr = Expr::lambda("x", Expr::var("x"));
         let result = eval(&expr, &env).unwrap();
 
         match result {
@@ -250,8 +245,8 @@ mod tests {
         let env = Env::new();
 
         // Test: (λx. x) 42
-        let identity = Expr::lambda("x", Type::Scalar, Expr::var("x"));
-        let app = Expr::app(identity, Expr::scalar(42.0));
+        let identity = Expr::lambda("x", Expr::var("x"));
+        let app = Expr::app(identity, Expr::scalar("42.0"));
 
         let result = eval(&app, &env).unwrap();
         assert_eq!(result, Value::Scalar(42.0));
@@ -264,7 +259,7 @@ mod tests {
         let expr = Expr::let_bind(
             "x",
             Type::Scalar,
-            Expr::scalar(5.0),
+            Expr::scalar("5.0"),
             Expr::var("x"),
         );
 

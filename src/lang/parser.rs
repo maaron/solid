@@ -123,9 +123,12 @@ fn parse_type(input: &str) -> IResult<&str, Type> {
 
 // ===== Expression Parsing =====
 
-/// Parse a scalar literal
+/// Parse a scalar literal (keep as string)
 fn parse_scalar(input: &str) -> IResult<&str, Expr> {
-    map(lexeme(double), Expr::scalar)(input)
+    map(
+        lexeme(recognize(double)),
+        |s: &str| Expr::scalar(s.to_string())
+    )(input)
 }
 
 /// Parse a boolean literal
@@ -181,7 +184,7 @@ fn parse_color(input: &str) -> IResult<&str, Expr> {
                 r: Box::new(r),
                 g: Box::new(g),
                 b: Box::new(b),
-                a: Box::new(Expr::scalar(1.0)),
+                a: Box::new(Expr::scalar("1.0")),
             },
         ),
     ))(input)
@@ -207,24 +210,15 @@ fn parse_cons(input: &str) -> IResult<&str, Expr> {
     )(input)
 }
 
-/// Parse lambda: (fn (x Type) body)
+/// Parse lambda: (fn param body)
 fn parse_lambda(input: &str) -> IResult<&str, Expr> {
     map(
         delimited(
             tuple((lexeme(char('(')), lexeme(keyword("fn")))),
-            tuple((
-                // Parameter with type: (x Type)
-                delimited(
-                    lexeme(char('(')),
-                    pair(lexeme(identifier), lexeme(parse_type)),
-                    lexeme(char(')')),
-                ),
-                // Body
-                parse_expr,
-            )),
+            pair(lexeme(identifier), parse_expr),
             lexeme(char(')')),
         ),
-        |((param, param_ty), body)| Expr::lambda(param, param_ty, body),
+        |(param, body)| Expr::lambda(param, body),
     )(input)
 }
 
@@ -245,27 +239,6 @@ fn parse_let(input: &str) -> IResult<&str, Expr> {
             // A proper implementation would do type inference
             Expr::let_bind(var, Type::Scalar, value, body)
         },
-    )(input)
-}
-
-/// Parse field: (field (p dim) body)
-fn parse_field(input: &str) -> IResult<&str, Expr> {
-    map(
-        delimited(
-            tuple((lexeme(char('(')), lexeme(keyword("field")))),
-            tuple((
-                // Parameter with dimension: (p 2)
-                delimited(
-                    lexeme(char('(')),
-                    pair(lexeme(identifier), lexeme(nom::character::complete::u64)),
-                    lexeme(char(')')),
-                ),
-                // Body
-                parse_expr,
-            )),
-            lexeme(char(')')),
-        ),
-        |((param, dim), body)| Expr::field(param, dim as usize, body),
     )(input)
 }
 
@@ -325,7 +298,6 @@ pub fn parse_expr(input: &str) -> IResult<&str, Expr> {
         parse_color,
         parse_lambda,
         parse_let,
-        parse_field,
         parse_if,
         parse_fold,
         parse_cons,
@@ -354,10 +326,10 @@ mod tests {
     #[test]
     fn test_parse_scalar() {
         let expr = parse_program("42.0").unwrap();
-        assert_eq!(expr, Expr::scalar(42.0));
+        assert_eq!(expr, Expr::scalar("42.0"));
 
         let expr = parse_program("3.14159").unwrap();
-        assert_eq!(expr, Expr::scalar(3.14159));
+        assert_eq!(expr, Expr::scalar("3.14159"));
     }
 
     #[test]
@@ -397,8 +369,8 @@ mod tests {
                 match (*func, *arg) {
                     (Expr::App { func: f2, arg: a1 }, a2) => {
                         assert_eq!(*f2, Expr::var("+"));
-                        assert_eq!(*a1, Expr::scalar(2.0));
-                        assert_eq!(a2, Expr::scalar(3.0));
+                        assert_eq!(*a1, Expr::scalar("2.0"));
+                        assert_eq!(a2, Expr::scalar("3.0"));
                     }
                     _ => panic!("Expected nested application"),
                 }
@@ -409,11 +381,10 @@ mod tests {
 
     #[test]
     fn test_parse_lambda() {
-        let expr = parse_program("(fn (x Scalar) (+ x 1.0))").unwrap();
+        let expr = parse_program("(fn x (+ x 1.0))").unwrap();
         match expr {
-            Expr::Lambda { param, param_ty, body: _ } => {
+            Expr::Lambda { param, .. } => {
                 assert_eq!(param, "x");
-                assert_eq!(param_ty, Type::Scalar);
             }
             _ => panic!("Expected lambda"),
         }
@@ -425,21 +396,9 @@ mod tests {
         match expr {
             Expr::Let { var, value, .. } => {
                 assert_eq!(var, "x");
-                assert_eq!(*value, Expr::scalar(5.0));
+                assert_eq!(*value, Expr::scalar("5.0"));
             }
             _ => panic!("Expected let"),
-        }
-    }
-
-    #[test]
-    fn test_parse_field() {
-        let expr = parse_program("(field (p 2) (length p))").unwrap();
-        match expr {
-            Expr::Field { param, dim, .. } => {
-                assert_eq!(param, "p");
-                assert_eq!(dim, 2);
-            }
-            _ => panic!("Expected field"),
         }
     }
 
@@ -477,8 +436,8 @@ mod tests {
     #[test]
     fn test_parse_circle() {
         let program = r#"
-            (fn (r Scalar)
-                (field (p 2)
+            (fn r
+                (fn p
                     (- (length p) r)))
         "#;
         let expr = parse_program(program).unwrap();

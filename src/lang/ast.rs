@@ -15,10 +15,9 @@ pub enum Expr {
     /// Variable: x
     Var(Var),
 
-    /// Lambda abstraction: λ(x : τ). e
+    /// Lambda abstraction: λx. e
     Lambda {
         param: Var,
-        param_ty: Type,
         body: Box<Expr>,
     },
 
@@ -54,8 +53,8 @@ pub enum Expr {
 
     // ===== Literals =====
 
-    /// Scalar literal: 3.14
-    Scalar(f64),
+    /// Scalar literal: "3.14" (string representation)
+    Scalar(String),
 
     /// Boolean literal: true/false
     Bool(bool),
@@ -78,15 +77,6 @@ pub enum Expr {
     Cons {
         head: Box<Expr>,
         tail: Box<Expr>,
-    },
-
-    // ===== Field Construction =====
-
-    /// Field literal: field (p : Vec n) ↦ e
-    Field {
-        param: Var,
-        dim: Nat,
-        body: Box<Expr>,
     },
 
     // ===== Let Binding =====
@@ -130,18 +120,17 @@ impl Expr {
         Expr::Var(name.into())
     }
 
-    pub fn scalar(value: f64) -> Self {
-        Expr::Scalar(value)
+    pub fn scalar(value: impl Into<String>) -> Self {
+        Expr::Scalar(value.into())
     }
 
     pub fn bool(value: bool) -> Self {
         Expr::Bool(value)
     }
 
-    pub fn lambda(param: impl Into<String>, param_ty: Type, body: Expr) -> Self {
+    pub fn lambda(param: impl Into<String>, body: Expr) -> Self {
         Expr::Lambda {
             param: param.into(),
-            param_ty,
             body: Box::new(body),
         }
     }
@@ -158,14 +147,6 @@ impl Expr {
             var: var.into(),
             ty,
             value: Box::new(value),
-            body: Box::new(body),
-        }
-    }
-
-    pub fn field(param: impl Into<String>, dim: Nat, body: Expr) -> Self {
-        Expr::Field {
-            param: param.into(),
-            dim,
             body: Box::new(body),
         }
     }
@@ -200,46 +181,23 @@ mod tests {
 
     #[test]
     fn test_expr_construction() {
-        // λ(x : Scalar). x + 1.0
+        // λx. x + 1.0
         let expr = Expr::lambda(
             "x",
-            Type::Scalar,
             Expr::app(
                 Expr::app(
                     Expr::builtin("+"),
                     Expr::var("x")
                 ),
-                Expr::scalar(1.0)
+                Expr::scalar("1.0")
             )
         );
 
         match expr {
-            Expr::Lambda { param, param_ty, .. } => {
+            Expr::Lambda { param, .. } => {
                 assert_eq!(param, "x");
-                assert_eq!(param_ty, Type::Scalar);
             }
             _ => panic!("Expected lambda"),
-        }
-    }
-
-    #[test]
-    fn test_field_construction() {
-        // field (p : Vec 2) ↦ length p
-        let field_expr = Expr::field(
-            "p",
-            2,
-            Expr::app(
-                Expr::builtin("length"),
-                Expr::var("p")
-            )
-        );
-
-        match field_expr {
-            Expr::Field { param, dim, .. } => {
-                assert_eq!(param, "p");
-                assert_eq!(dim, 2);
-            }
-            _ => panic!("Expected field"),
         }
     }
 }
