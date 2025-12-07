@@ -20,7 +20,7 @@ impl Renderer2D {
         width: u32,
         height: u32,
     ) -> Self {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
         });
@@ -37,15 +37,14 @@ impl Renderer2D {
             .unwrap();
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some("Device"),
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::default(),
-                    memory_hints: Default::default(),
-                },
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("Device"),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::default(),
+                memory_hints: Default::default(),
+                experimental_features: wgpu::ExperimentalFeatures::default(),
+                trace: wgpu::Trace::Off,
+            })
             .await
             .unwrap();
 
@@ -238,14 +237,14 @@ impl Renderer2D {
     /// Each pixel is RGBA8 format (4 bytes per pixel)
     pub fn update_texture(&self, data: &[u8]) {
         self.queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &self.texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             data,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * self.width),
                 rows_per_image: Some(self.height),
@@ -285,6 +284,7 @@ impl Renderer2D {
                         }),
                         store: wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
@@ -309,5 +309,112 @@ impl Renderer2D {
 
     pub fn height(&self) -> u32 {
         self.height
+    }
+
+    /// Get reference to the wgpu device (needed for egui)
+    pub fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+
+    /// Get the surface format (needed for egui)
+    pub fn format(&self) -> wgpu::TextureFormat {
+        self.surface_config.format
+    }
+
+    /// Render with egui overlay
+    pub fn render_with_egui(
+        &self,
+        egui_renderer: &mut egui_wgpu::Renderer,
+        clipped_primitives: &[egui::ClippedPrimitive],
+        screen_descriptor: &egui_wgpu::ScreenDescriptor,
+        textures_delta: &egui::TexturesDelta,
+    ) -> Result<(), wgpu::SurfaceError> {
+        let output = self.surface.get_current_texture()?;
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+
+        // First render the SDF content
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.1,
+                            b: 0.1,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..6, 0..1);
+        }
+
+        // Then render egui on top
+        for (id, image_delta) in &textures_delta.set {
+            egui_renderer.update_texture(&self.device, &self.queue, *id, image_delta);
+        }
+
+        egui_renderer.update_buffers(
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            clipped_primitives,
+            screen_descriptor,
+        );
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("egui Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+
+            // SAFETY: egui-wgpu 0.33 requires 'static lifetime on RenderPass, but this is
+            // safe because we use the render pass immediately and drop it before the encoder
+            // is consumed. The 'static lifetime is just an API quirk.
+            let render_pass_static: &mut wgpu::RenderPass<'static> =
+                unsafe { std::mem::transmute(&mut render_pass) };
+
+            egui_renderer.render(render_pass_static, clipped_primitives, screen_descriptor);
+        }
+
+        for id in &textures_delta.free {
+            egui_renderer.free_texture(id);
+        }
+
+        self.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
+
+        Ok(())
     }
 }
